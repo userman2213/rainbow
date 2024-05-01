@@ -142,6 +142,25 @@ class Rainbow:
                 states[i_env], actions[i_env], rewards[i_env], next_states[i_env], dones[i_env], truncateds[i_env], i_env = i_env
             )
 
+    def store_replay_beta(self, state, action, reward, next_state, done, truncated, i_env=0):
+        # Case where no multi-steps:
+        if self.multi_steps == 1:
+            self.replay_memory.store(
+                state, action, reward, next_state, done
+            )
+        else:
+            self.multi_steps_buffers[i_env].add(state, action, reward, next_state, done)
+            if self.multi_steps_buffers[i_env].is_full():
+                self.replay_memory.store(
+                    *self.multi_steps_buffers[i_env].get_multi_step_replay_alphatest()
+                )
+
+        # Store history
+        self.episode_rewards[i_env].append(reward)
+
+        if done or truncated:
+            self.log(i_env)
+            self.new_episode(i_env)
     
     def train(self):
         self.steps += 1
@@ -180,7 +199,9 @@ class Rainbow:
         epsilon = self.get_current_epsilon()
         if np.random.rand() < epsilon:
             return np.random.choice(self.nb_actions)
-        return self.pick_action(state)
+        else:
+            tensor = self.pick_action(state)
+        return int(tensor.numpy().item())
 
     def e_greedy_pick_actions(self, states):
         epsilon = self.get_current_epsilon()
@@ -199,8 +220,9 @@ class Rainbow:
         if self.distributional: return self._distributional_train_step(*args, **kwargs)
         return self._classic_train_step(*args, **kwargs)
     def pick_action(self, *args, **kwargs):
-        if self.distributional: return int(self._distributional_pick_action(*args, **kwargs))
-        return int(self._classic_pick_action(*args, **kwargs))
+        #print(self._distributional_pick_action(*args, **kwargs))
+        if self.distributional: return self._distributional_pick_action(*args, **kwargs)
+        return self._classic_pick_action(*args, **kwargs)
     def pick_actions(self, *args, **kwargs):
         if self.distributional: return self._distributional_pick_actions(*args, **kwargs)
         return self._classic_pick_actions(*args, **kwargs)
